@@ -30,15 +30,14 @@ compile: init
 .PHONY: run
 run: compile
 	@echo "========================================="
-	@echo "Launching BeaconCore Production..."
+	@echo "Launching BeaconCore Production with Real-time Logs..."
 	@echo "========================================="
-	@nohup erl -pa ebin/ \
+	erl -pa ebin/ \
 		-name $(NODE_NAME) \
 		-setcookie $(COOKIE) \
 		-config config/sys \
-		-eval "application:start(beacon_core), io:format('~nApp running~n'), timer:sleep(infinity)." \
-		-noinput > beacon.log 2>&1 &
-	@echo "Started. PID: $$! - Check beacon.log for details."
+		-eval "application:start(beacon_core), io:format('[BeaconCore] *** APP RUNNING - Listening on port 8080 ***~n'), timer:sleep(infinity)." \
+		-noinput
 
 .PHONY: dev
 dev: compile

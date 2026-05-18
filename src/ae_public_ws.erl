@@ -7,20 +7,24 @@
 -define(WS_MAGIC, "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").
 
 handle_upgrade(Socket, Headers, QueryString) ->
+    io:format("[INFO] WebSocket upgrade starting~n"),
     case extract_header(Headers, "sec-websocket-key") of
         {ok, ClientKey} ->
+            io:format("[DEBUG] Found WebSocket key: ~s~n", [ClientKey]),
             case verify_headers(Headers) of
                 ok ->
                     AcceptKey = compute_accept_key(ClientKey),
                     send_upgrade_response(Socket, AcceptKey),
                     UserId = extract_user_id(QueryString),
                     pg:join(notification_scope, {user, UserId}, self()),
-                    ?LOG_DEBUG("WebSocket user registered", #{user_id => UserId}),
+                    io:format("[NOTICE] WebSocket user registered | UserId: ~p, Pid: ~p~n", [UserId, self()]),
                     ws_loop(Socket, UserId);
                 error ->
+                    io:format("[WARN] WebSocket header verification failed~n"),
                     send_400(Socket)
             end;
         error ->
+            io:format("[WARN] Missing WebSocket key header~n"),
             send_400(Socket)
     end.
 

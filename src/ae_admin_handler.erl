@@ -13,23 +13,30 @@ handle_request(Socket, _Method, _Path, _Body) ->
     gen_tcp:close(Socket).
 
 handle_broadcast(Socket, Body) ->
+    io:format("[DEBUG] Broadcast body received | Size: ~p bytes~n", [byte_size(Body)]),
     case parse_json_broadcast(Body) of
         {ok, BroadcastType, Payload, FilterParams} ->
+            io:format("[INFO] Broadcast parsed | Type: ~p, Filter: ~p~n", [BroadcastType, FilterParams]),
             case write_audit_log(BroadcastType, FilterParams) of
                 ok ->
+                    io:format("[DEBUG] Audit log written~n"),
                     case publish_to_rabbitmq(BroadcastType, Payload, FilterParams) of
                         ok ->
+                            io:format("[NOTICE] Message published to RabbitMQ | RoutingKey: ~p~n", [derive_routing_key(BroadcastType, FilterParams)]),
                             send_202_accepted(Socket);
                         {error, Reason} ->
                             ?LOG_ERROR("Failed to publish to RabbitMQ", #{reason => Reason}),
+                            io:format("[ERROR] RabbitMQ publish failed: ~p~n", [Reason]),
                             send_500(Socket)
                     end;
                 {error, Reason} ->
                     ?LOG_ERROR("Failed to write audit log", #{reason => Reason}),
+                    io:format("[ERROR] Audit log write failed: ~p~n", [Reason]),
                     send_500(Socket)
             end;
         {error, Reason} ->
             ?LOG_WARN("Invalid broadcast JSON", #{reason => Reason}),
+            io:format("[WARN] Invalid JSON in broadcast: ~p~n", [Reason]),
             send_400(Socket)
     end.
 

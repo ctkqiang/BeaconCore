@@ -80,14 +80,17 @@ code_change(_OldVsn, State, _Extra) ->
 handle_client(Socket) ->
     case gen_tcp:recv(Socket, 0, 5000) of
         {ok, Data} ->
+            ?LOG_DEBUG("Raw HTTP request received", #{size_bytes => byte_size(Data)}),
             case parse_http_request(Data) of
                 {ok, Method, Path, Headers, Body} ->
+                    ?LOG_DEBUG("Parsed HTTP request", #{method => Method, path => Path, headers_count => length(Headers), body_size => byte_size(Body)}),
                     handle_request(Socket, Method, Path, Headers, Body);
                 _ ->
+                    ?LOG_WARN("Failed to parse HTTP request", #{}),
                     handle_request(Socket, unknown, unknown, [], <<>>)
             end;
         {error, Reason} ->
-            io:format("[ERROR] Socket error: ~p~n", [Reason]),
+            ?LOG_ERROR("Socket receive error", #{reason => Reason}),
             gen_tcp:close(Socket)
     end.
 
@@ -133,9 +136,8 @@ parse_headers_loop([], Headers) ->
     {lists:reverse(Headers), <<>>}.
 
 handle_request(Socket, 'GET', <<"/health", _/binary>>, _Headers, _Body) ->
-    io:format("[DEBUG] Matched /health~n"),
+    ?LOG_NOTICE("Processing /health request", #{}),
 
-    % Check service status
     DbStatus = check_database_status(),
     PgStatus = check_pg_status(),
     AmqpStatus = check_amqp_status(),
@@ -145,11 +147,11 @@ handle_request(Socket, 'GET', <<"/health", _/binary>>, _Headers, _Body) ->
         _ -> <<"degraded">>
     end,
 
-    % Build comprehensive health response
+    ?LOG_DEBUG("Health check results", #{database => DbStatus, process_group => PgStatus, amqp => AmqpStatus, overall => OverallStatus}),
+
     Body = build_health_response(OverallStatus, DbStatus, PgStatus, AmqpStatus),
     ContentLength = integer_to_binary(byte_size(Body)),
 
-    % Professional HTTP response with security headers
     Response = <<"HTTP/1.1 200 OK\r\n"
                  "Content-Type: application/json; charset=utf-8\r\n"
                  "Content-Length: ", ContentLength/binary, "\r\n"
@@ -164,22 +166,23 @@ handle_request(Socket, 'GET', <<"/health", _/binary>>, _Headers, _Body) ->
                  "\r\n",
                  Body/binary>>,
     gen_tcp:send(Socket, Response),
+    ?LOG_NOTICE("Sent /health response", #{status => OverallStatus, size_bytes => byte_size(Body)}),
     gen_tcp:close(Socket);
 
 handle_request(Socket, 'GET', <<"/ws", QueryString/binary>>, Headers, _Body) ->
-    io:format("[DEBUG] Matched /ws with query: ~p~n", [QueryString]),
+    ?LOG_NOTICE("WebSocket upgrade request", #{query => QueryString, headers_count => length(Headers)}),
     ae_public_ws:handle_upgrade(Socket, Headers, binary_to_list(QueryString));
 
 handle_request(Socket, 'POST', <<"/v1/admin/broadcast", _/binary>>, _Headers, Body) ->
-    io:format("[DEBUG] Matched /v1/admin/broadcast~n"),
+    ?LOG_NOTICE("Admin broadcast request", #{body_size => byte_size(Body)}),
     ae_admin_handler:handle_request(Socket, 'POST', <<"/v1/admin/broadcast">>, Body);
 
 handle_request(Socket, 'POST', <<"/v1/admin/", _/binary>> = Path, _Headers, Body) ->
-    io:format("[DEBUG] Matched admin path: ~p~n", [Path]),
+    ?LOG_NOTICE("Admin request", #{path => Path, body_size => byte_size(Body)}),
     ae_admin_handler:handle_request(Socket, 'POST', Path, Body);
 
 handle_request(Socket, Method, Path, _Headers, _Body) ->
-    io:format("[DEBUG] No match for Method: ~p, Path: ~p~n", [Method, Path]),
+    ?LOG_WARN("No matching route", #{method => Method, path => Path}),
     NotFound = <<"HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nNot Found">>,
     gen_tcp:send(Socket, NotFound),
     gen_tcp:close(Socket).
