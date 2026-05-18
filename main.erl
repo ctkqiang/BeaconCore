@@ -6,11 +6,13 @@
 -include("src/header/logger.hrl").
 
 start(_StartType, _StartArgs) ->
+    ?logger:set_level(info),
     load_env(),
 
     {ok, _} = pg:start_link(notification_scope),
 
-    beacon_core_supervisor:start_link().
+    beacon_core_supervisor:start_link(),
+    ?logger:log(info, "BeaconCore application initialized", []).
 
 stop(_State) ->
     ok.
