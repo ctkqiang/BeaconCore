@@ -29,33 +29,30 @@ handle_upgrade(Socket, Headers, QueryString) ->
     end.
 
 ws_loop(Socket, UserId) ->
-    case gen_tcp:recv(Socket, 2, 5000) of
-        {ok, <<FIN:1, _RSV:3, Opcode:4, Mask:1, PayloadLen:7>>} ->
-            case recv_frame_payload(Socket, Mask, PayloadLen) of
-                {ok, Payload} ->
-                    case handle_frame(Socket, Opcode, Payload, UserId) of
-                        continue -> ws_loop(Socket, UserId);
-                        close -> gen_tcp:close(Socket)
-                    end;
-                {error, _} ->
-                    gen_tcp:close(Socket)
-            end;
-        {error, timeout} ->
+    receive
+        {send_msg, MessagePayload} ->
+            Frame = encode_text_frame(MessagePayload),
+            gen_tcp:send(Socket, Frame),
             ws_loop(Socket, UserId);
-        {error, _} ->
+        {close, _} ->
             gen_tcp:close(Socket)
-    after
-        infinity ->
-            receive
-                {send_msg, MessagePayload} ->
-                    Frame = encode_text_frame(MessagePayload),
-                    gen_tcp:send(Socket, Frame),
-                    ws_loop(Socket, UserId);
-                {close, _} ->
-                    gen_tcp:close(Socket)
-            after 5000 ->
-                ws_loop(Socket, UserId)
-            end
+    after 100 ->
+        case gen_tcp:recv(Socket, 2, 0) of
+            {ok, <<FIN:1, _RSV:3, Opcode:4, Mask:1, PayloadLen:7>>} ->
+                case recv_frame_payload(Socket, Mask, PayloadLen) of
+                    {ok, Payload} ->
+                        case handle_frame(Socket, Opcode, Payload, UserId) of
+                            continue -> ws_loop(Socket, UserId);
+                            close -> gen_tcp:close(Socket)
+                        end;
+                    {error, _} ->
+                        gen_tcp:close(Socket)
+                end;
+            {error, timeout} ->
+                ws_loop(Socket, UserId);
+            {error, _} ->
+                gen_tcp:close(Socket)
+        end
     end.
 
 recv_frame_payload(Socket, 0, PayloadLen) ->
@@ -156,7 +153,9 @@ unmask_payload_loop(<<Byte:8, Rest/binary>>, MaskKey, Idx, Acc) ->
     unmask_payload_loop(Rest, MaskKey, Idx + 1, <<Acc/binary, UnmaskedByte:8>>).
 
 compute_accept_key(ClientKey) ->
-    Key = <<ClientKey/binary, ?WS_MAGIC>>,
+    ClientKeyBin = if is_list(ClientKey) -> list_to_binary(ClientKey); true -> ClientKey end,
+    Magic = list_to_binary(?WS_MAGIC),
+    Key = <<ClientKeyBin/binary, Magic/binary>>,
     SHA = crypto:hash(sha, Key),
     base64:encode(SHA).
 

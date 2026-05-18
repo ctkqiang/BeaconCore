@@ -2,7 +2,7 @@
 
 -include_lib("header/logger.hrl").
 
--export([handle_request/2]).
+-export([handle_request/4]).
 
 handle_request(Socket, 'POST', <<"/v1/admin/broadcast", _/binary>>, Body) ->
     handle_broadcast(Socket, Body);
