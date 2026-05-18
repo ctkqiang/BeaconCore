@@ -1,10 +1,8 @@
-EBIN_DIR = ebin
-SRC_DIR  = src
-ERLC = erlc
-ERL  = erl
+EBIN_DIR  = ebin
+SRC_DIR   = src
+ERL       = erl
 NODE_NAME = beacon_core@127.0.0.1
 COOKIE    = beacon_secret
-
 
 .PHONY: all
 all: init compile
@@ -16,19 +14,24 @@ init:
 .PHONY: compile
 compile: init
 	@echo "========================================="
-	@echo "正在编译 BeaconCore 原生源代码..."
+	@echo "Compiling BeaconCore source..."
 	@echo "========================================="
-	$(ERLC) -o $(EBIN_DIR)/ main.erl beacon_core_supervisor.erl
+	@$(ERL) -noshell \
+		-eval 'compile:file("main.erl", [{outdir,"ebin"}, return_errors])' \
+		-eval 'compile:file("beacon_core_supervisor.erl", [{outdir,"ebin"}, return_errors])' \
+		-s init stop
 	@if [ -d "$(SRC_DIR)" ]; then \
-		$(ERLC) -o $(EBIN_DIR)/ $(SRC_DIR)/**/*.erl; \
+		for f in $(SRC_DIR)/*.erl; do \
+			$(ERL) -noshell -eval "compile:file(\"$$f\", [{outdir,\"$(EBIN_DIR)\"}, return_errors])" -s init stop; \
+		done; \
 	fi
-	@echo "编译完成.输出目录: /$(EBIN_DIR)"
+	@echo "Compile done. Output: $(EBIN_DIR)/"
 
 
 .PHONY: run
 run: all
 	@echo "========================================="
-	@echo "正在启动 BeaconCore 集群节点..."
+	@echo "Launching BeaconCore cluster node..."
 	@echo "========================================="
 	$(ERL) -pa $(EBIN_DIR)/ \
 	       -name $(NODE_NAME) \
@@ -39,6 +42,6 @@ run: all
 
 .PHONY: clean
 clean:
-	@echo "正在清理编译后的 beam 文件..."
+	@echo "Cleaning compiled beam files..."
 	@rm -rf $(EBIN_DIR)/*.beam
-	@echo "清理完成."
+	@echo "Clean done."

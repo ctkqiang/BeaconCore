@@ -1,1 +1,5 @@
 *.beam
+*.exe
+*.bin
+.env 
+*.config

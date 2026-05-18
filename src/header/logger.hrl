@@ -1,0 +1,1 @@
+-define(logger, 'standard.logger').
