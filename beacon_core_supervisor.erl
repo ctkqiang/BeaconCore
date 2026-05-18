@@ -13,6 +13,8 @@ init([]) ->
         period => 3
     },
     
-    ChildSpecs = [],
+    ChildSpecs = [
+        {network_gateway, {network_gateway, start_link, []}, permanent, 5000, worker, [network_gateway]}
+    ],
     
     {ok, {SupFlags, ChildSpecs}}.

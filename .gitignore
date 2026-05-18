@@ -6,3 +6,5 @@
 .claude-instructions
 .trae
 .ibm
+*.log
+*.dump

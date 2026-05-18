@@ -1,29 +1,47 @@
--module(main).
+-module(beacon_core).
 -behaviour(application).
 
 -export([start/2, stop/1]).
 
--include("src/header/logger.hrl").
+-include_lib("header/logger.hrl").
 
 start(_StartType, _StartArgs) ->
-    ?logger:set_level(info),
+    beacon_logger:set_level(info),
     load_env(),
 
-    {ok, _} = pg:start_link(notification_scope),
+    {ok, _PgPid} = pg:start_link(notification_scope),
 
-    beacon_core_supervisor:start_link(),
-    ?logger:log(info, "BeaconCore application initialized", []).
+    case beacon_core_supervisor:start_link() of
+        {ok, SupPid} ->
+            beacon_logger:log(info, "BeaconCore application initialized successfully.", []),
+            Port = application:get_env(beacon_core, http_port, 8080),
+            io:format("[BeaconCore] Active | Health check port: ~p~n", [Port]),
+            {ok, SupPid};
+            
+        {error, Reason} ->
+            {error, Reason}
+    end.
 
 stop(_State) ->
     ok.
 
+% Load environment variables from .env file
+% If .env file is not found, use defaults.
 load_env() ->
-    {ok, Bin} = file:read_file(".env"),
-    Lines = binary:split(Bin, <<"\n">>, [global]),
-    lists:foreach(fun parse_line/1, Lines).
+    %% Guard against missing local environment profiles
+    case file:read_file(".env") of
+        {ok, Bin} ->
+            Lines = binary:split(Bin, <<"\n">>, [global]),
+            lists:foreach(fun parse_line/1, Lines);
+        {error, Reason} ->
+            io:format("Warning: Could not read .env profile (~p). Using defaults.~n", [Reason]),
+            ok
+    end.
 
 parse_line(Line) ->
-    case binary:split(Line, <<"=">>) of
+    %% Trim carriage returns (\r) out for safe native Windows/MinGW parsing strings
+    CleanLine = string:trim(Line, trailing, "\r"),
+    case binary:split(CleanLine, <<"=">>) of
         [Key, Value] ->
             KeyStr = binary_to_list(Key),
             ValStr = string:trim(binary_to_list(Value)),

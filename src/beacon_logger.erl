@@ -1,4 +1,4 @@
--module(standard.logger).
+-module(beacon_logger).
 -behaviour(gen_server).
 
 -export([log/3, set_level/1]).

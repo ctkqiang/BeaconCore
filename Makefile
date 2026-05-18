@@ -17,7 +17,7 @@ compile: init
 	@echo "Compiling BeaconCore source..."
 	@echo "========================================="
 	@$(ERL) -noshell \
-		-eval 'compile:file("main.erl", [{outdir,"ebin"}, return_errors])' \
+		-eval 'compile:file("beacon_core.erl", [{outdir,"ebin"}, return_errors])' \
 		-eval 'compile:file("beacon_core_supervisor.erl", [{outdir,"ebin"}, return_errors])' \
 		-s init stop
 	@if [ -d "$(SRC_DIR)" ]; then \
@@ -27,18 +27,29 @@ compile: init
 	fi
 	@echo "Compile done. Output: $(EBIN_DIR)/"
 
-
 .PHONY: run
-run: all
+run: compile
 	@echo "========================================="
-	@echo "Launching BeaconCore cluster node..."
+	@echo "Launching BeaconCore Production..."
 	@echo "========================================="
-	$(ERL) -pa $(EBIN_DIR)/ \
-	       -name $(NODE_NAME) \
-	       -setcookie $(COOKIE) \
-	       -config config/sys \
-	       -eval "application:start(main)."
+	@nohup erl -pa ebin/ \
+		-name $(NODE_NAME) \
+		-setcookie $(COOKIE) \
+		-config config/sys \
+		-eval "application:start(beacon_core), io:format('~nApp running~n'), timer:sleep(infinity)." \
+		-noinput > beacon.log 2>&1 &
+	@echo "Started. PID: $$! - Check beacon.log for details."
 
+.PHONY: dev
+dev: compile
+	@echo "========================================="
+	@echo "Launching BeaconCore Development Node..."
+	@echo "========================================="
+	erl -pa ebin/ \
+		-name $(NODE_NAME) \
+		-setcookie $(COOKIE) \
+		-config config/sys \
+		-eval "application:start(beacon_core)."
 
 .PHONY: clean
 clean:
