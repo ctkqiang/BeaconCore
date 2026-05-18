@@ -103,7 +103,14 @@ parse_http(_) ->
 
 handle_request(Socket, 'GET', <<"/health", _/binary>>) ->
     io:format("[DEBUG] Matched /health~n"),
-    Response = <<"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK">>,
+    Body = <<"{\"status\":200,\"message\":\"healthy\"}">>,
+    ContentLength = integer_to_binary(byte_size(Body)),
+    Response = <<"HTTP/1.1 200 OK\r\n"
+                 "Content-Type: application/json\r\n"
+                 "Content-Length: ", ContentLength/binary, "\r\n"
+                 "Connection: close\r\n"
+                 "\r\n",
+                 Body/binary>>,
     gen_tcp:send(Socket, Response),
     gen_tcp:close(Socket);
 
