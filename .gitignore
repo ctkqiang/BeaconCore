@@ -3,3 +3,6 @@
 *.bin
 .env 
 *.config
+.claude-instructions
+.trae
+.ibm

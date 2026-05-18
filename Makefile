@@ -37,7 +37,7 @@ run: all
 	       -name $(NODE_NAME) \
 	       -setcookie $(COOKIE) \
 	       -config config/sys \
-	       -eval "application:start(beacon_core)."
+	       -eval "application:start(main)."
 
 
 .PHONY: clean
