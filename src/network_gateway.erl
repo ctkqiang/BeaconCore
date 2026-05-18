@@ -22,7 +22,7 @@ init([]) ->
     Port = application:get_env(beacon_core, http_port, 8080),
     ?LOG_DEBUG("Gateway port configured", #{port => Port}),
 
-    SocketOptions = [binary, {packet, http}, {reuseaddr, true}, {active, false}],
+    SocketOptions = [binary, {reuseaddr, true}, {active, false}],
 
     case gen_tcp:listen(Port, SocketOptions) of
         {ok, ListenSocket} ->
@@ -77,24 +77,42 @@ code_change(_OldVsn, State, _Extra) ->
 
 handle_client(Socket) ->
     case gen_tcp:recv(Socket, 0, 5000) of
-        {ok, {http_request, Method, Path, Version}} ->
-            io:format("[DEBUG] Received request - Method: ~p, Path: ~p, Version: ~p~n", [Method, Path, Version]),
-            handle_request(Socket, Method, Path);
+        {ok, Data} ->
+            io:format("[DEBUG] Received raw data: ~p~n", [Data]),
+            case parse_http(Data) of
+                {ok, Method, Path} ->
+                    handle_request(Socket, Method, Path);
+                _ ->
+                    handle_request(Socket, unknown, unknown)
+            end;
         {error, Reason} ->
-            io:format("[ERROR] Failed to receive HTTP request: ~p~n", [Reason])
+            io:format("[ERROR] Socket error: ~p~n", [Reason]),
+            gen_tcp:close(Socket)
     end.
 
-handle_request(Socket, 'GET', {abs_path, <<"/health">>}) ->
+parse_http(<<"GET ", Rest/binary>>) ->
+    case binary:split(Rest, <<" ">>) of
+        [Path, _] ->
+            io:format("[DEBUG] Parsed path: ~p~n", [Path]),
+            {ok, 'GET', Path};
+        _ ->
+            error
+    end;
+parse_http(_) ->
+    error.
+
+handle_request(Socket, 'GET', <<"/health", _/binary>>) ->
+    io:format("[DEBUG] Matched /health~n"),
     Response = <<"HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK">>,
     gen_tcp:send(Socket, Response),
     gen_tcp:close(Socket);
 
-handle_request(Socket, 'GET', {abs_path, <<"/ws">>}) ->
-    inet:setopts(Socket, [{packet, raw}]),
-    io:format("[GATEWAY] WebSocket handshake incoming on raw stream.~n"),
+handle_request(Socket, 'GET', <<"/ws", _/binary>>) ->
+    io:format("[DEBUG] Matched /ws~n"),
     gen_tcp:close(Socket);
 
-handle_request(Socket, _Method, _Path) ->
+handle_request(Socket, Method, Path) ->
+    io:format("[DEBUG] No match for Method: ~p, Path: ~p~n", [Method, Path]),
     NotFound = <<"HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nNot Found">>,
     gen_tcp:send(Socket, NotFound),
     gen_tcp:close(Socket).
