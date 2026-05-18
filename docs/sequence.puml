@@ -1,0 +1,90 @@
+@startuml
+skinparam style strictuml
+skinparam BoxPadding 10
+
+
+box "Client Space" #F0F4F8
+actor "Public User Browser\n(Public User)" as Browser
+actor "Administrator\n(Admin User)" as Admin
+end box
+
+box "Beacon Core Notification Microservice" #E3F2FD
+participant "Admin API Gateway\n(API Gateway)" as API
+participant "Dynamic Routing Engine\n(Routing Engine)" as Engine
+participant "Cowboy WS Connection Handler\n(Erlang Process)" as Cowboy
+database "Distributed Process Registry\n(pg Module)" as Registry
+end box
+
+box "Infrastructure Layer" #ECEFF1
+database "Relational Database\n(PostgreSQL / MySQL)" as DB
+queue "RabbitMQ Message Broker\n(Topic Exchange)" as Rabbit
+end box
+
+box "External Native Push (W3C Open Standard)" #FFF3E0
+participant "Vendor Web Push Gateway\n(Apple/Google/Mozilla)" as VendorPush
+end box
+
+== Phase 1: Public User Connection & Registration (No Firebase) ==
+
+Browser -> Cowboy : Establish WebSocket Connection (ws://)
+activate Cowboy
+Cowboy -> Registry : pg:join(notification_scope, {user, PublicUserId}, self())
+activate Registry
+Registry --> Cowboy : Registration Success Confirmation
+deactivate Registry
+
+== Phase 2: Admin Broadcast & Dynamic Routing (With Auditing) ==
+
+Admin -> API : POST /v1/admin/broadcast\n(Payload + Dynamic Filtering Parameters)
+activate API
+
+note over API : Parameters Supported: Broadcast (all), Specific Channel (channel),\nSpecific Segment (segment), Designated User ID (id)
+
+' Auditing Step
+API -> DB : Write Audit Log (INSERT INTO admin_audit_logs)
+activate DB
+DB --> API : Audit Log Saved Successfully
+deactivate DB
+
+' Routing Transformation Step
+API -> Rabbit : Push Dispatch Intent to Queue\n(routing_key: notifications.type.*)
+activate Rabbit
+API --> Admin : 202 Dispatched (Asynchronous Accepted)
+deactivate API
+
+Rabbit -> Engine : Consumer Process Extracts Message
+deactivate Rabbit
+
+activate Engine
+Engine -> DB : Dynamically Resolve Target Users Based on Arguments\n(e.g., SELECT id FROM users WHERE tier='premium')
+activate DB
+DB --> Engine : Return Matched User ID List
+deactivate DB
+
+' Internal Loop Dispatch
+loop Iterate Through Each Target User ID (Target UserId)
+    Engine -> Registry : pg:get_members(notification_scope, {user, CurrentUserId})
+    activate Registry
+    Registry --> Engine : Return User Process IDs (PID List)
+    deactivate Registry
+    
+    alt Scenario A: User Online (Erlang Process Found)
+        Engine -> Cowboy : Inter-node Message Passing: Pid ! {send_msg, Payload}
+        Cowboy -> Browser : Real-time Push via Persistent WebSocket Connection
+    else Scenario B: User Offline (Process List is Empty)
+        Engine -> DB : Query User's W3C Subscription Credentials & VAPID Keys
+        activate DB
+        DB --> Engine : Return Subscription Metadata
+        deactivate DB
+        
+        Engine -> Engine : Sign & Encrypt Payload Using Server Private Key (VAPID)
+        Engine -> VendorPush : Send HTTP POST Request to Vendor Gateway
+        activate VendorPush
+        VendorPush -> Browser : Wake up Browser Service Worker & Display Notification
+        deactivate VendorPush
+    end
+end
+
+deactivate Engine
+deactivate Cowboy
+@endum
