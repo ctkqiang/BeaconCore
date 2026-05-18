@@ -214,6 +214,6 @@ get_uptime() ->
 
 % Get memory usage in MB
 get_memory_usage() ->
-    {Total, _} = erlang:memory(total),
-    MB = (Total div 1024) div 1024,
+    Total = erlang:memory(total),
+    MB = Total div (1024 * 1024),
     integer_to_binary(MB).
