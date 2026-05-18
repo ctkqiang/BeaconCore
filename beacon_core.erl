@@ -62,11 +62,17 @@ parse_line(Line) ->
 mapping("BEAKON_HTTP_PORT")         -> {ok, http_port,         int};
 mapping("BEAKON_DB_HOST")           -> {ok, db_host,           str};
 mapping("BEAKON_DB_PORT")           -> {ok, db_port,           int};
-mapping("BEAKON_DB_USER")           -> {ok, db_user,           str};
-mapping("BEAKON_DB_PASS")           -> {ok, db_pass,           str};
-mapping("BEAKON_DB_NAME")           -> {ok, db_name,           str};
+mapping("BEAKON_DB_USER")           -> {ok, db_username,       str};
+mapping("BEAKON_DB_PASS")           -> {ok, db_password,       str};
+mapping("BEAKON_DB_NAME")           -> {ok, db_database,       str};
 mapping("BEAKON_DB_SSL_MODE")       -> {ok, db_ssl,            str};
 mapping("BEAKON_AMQP_URL")          -> {ok, amqp_url,          str};
 mapping("BEAKON_VAPID_PUBLIC_KEY")  -> {ok, vapid_public_key,  bin};
 mapping("BEAKON_VAPID_PRIVATE_KEY") -> {ok, vapid_private_key, bin};
+mapping("RABBITMQ_DEFAULT_USER")    -> {ok, amqp_user,         str};
+mapping("RABBITMQ_DEFAULT_PASS")    -> {ok, amqp_pass,         str};
+mapping("RABBITMQ_HOST")            -> {ok, amqp_host,         str};
+mapping("RABBITMQ_PORT")            -> {ok, amqp_port,         int};
+mapping("RABBITMQ_MANAGEMENT_PORT") -> {ok, amqp_mgmt_port,    int};
+mapping("RABBITMQ_DOCKER_IMAGE")    -> {ok, amqp_docker_image, str};
 mapping(_)                          -> undefined.

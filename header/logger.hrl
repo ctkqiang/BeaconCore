@@ -15,6 +15,9 @@
 -define(LOG_WARN(Msg), io:format("[WARN] ~s~n", [Msg])).
 -define(LOG_WARN(Msg, Meta), io:format("[WARN] ~s | ~p~n", [Msg, Meta])).
 
+-define(LOG_WARNING(Msg), io:format("[WARN] ~s~n", [Msg])).
+-define(LOG_WARNING(Msg, Meta), io:format("[WARN] ~s | ~p~n", [Msg, Meta])).
+
 -define(LOG_ERROR(Msg), io:format("[ERROR] ~s~n", [Msg])).
 -define(LOG_ERROR(Msg, Meta), io:format("[ERROR] ~s | ~p~n", [Msg, Meta])).
 

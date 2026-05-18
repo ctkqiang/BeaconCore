@@ -50,7 +50,7 @@ handle_info(accept_next, State = #state{listen_socket = ListenSocket}) ->
     case gen_tcp:accept(ListenSocket, 1000) of
         {ok, ClientSocket} ->
             ?LOG_DEBUG("Gateway accepted client connection"),
-            spawn_link(fun() -> handle_client(ClientSocket) end),
+            spawn(fun() -> handle_client(ClientSocket) end),
             self() ! accept_next,
             {noreply, State};
         {error, timeout} ->
@@ -64,6 +64,8 @@ handle_info(accept_next, State = #state{listen_socket = ListenSocket}) ->
 handle_info(_Info, State) ->
     {noreply, State}.
 
+%% This handles process termination
+%% It closes the listening socket and returns ok
 terminate(_Reason, #state{listen_socket = ListenSocket}) ->
     if ListenSocket =/= undefined -> gen_tcp:close(ListenSocket); true -> ok end,
     ok.
