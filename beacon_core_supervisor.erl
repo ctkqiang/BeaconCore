@@ -14,8 +14,7 @@ init([]) ->
     },
     
     ChildSpecs = [
-        {network_gateway, {network_gateway, start_link, []}, permanent, 5000, worker, [network_gateway]},
-        {ae_routing_engine, {ae_routing_engine, start_link, []}, permanent, 5000, worker, [ae_routing_engine]}
+        {network_gateway, {network_gateway, start_link, []}, permanent, 5000, worker, [network_gateway]}
     ],
     
     {ok, {SupFlags, ChildSpecs}}.

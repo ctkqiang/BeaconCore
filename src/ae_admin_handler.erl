@@ -2,12 +2,19 @@
 
 -include_lib("header/logger.hrl").
 
--export([handle_request/4]).
+-export([handle_request/5]).
 
-handle_request(Socket, 'POST', <<"/v1/admin/broadcast", _/binary>>, Body) ->
-    handle_broadcast(Socket, Body);
+handle_request(Socket, 'POST', <<"/v1/admin/broadcast", _/binary>>, Body, Headers) ->
+    case validate_api_key(Headers) of
+        {ok, ApiKey} ->
+            io:format("[DEBUG] Admin request authenticated | ApiKey: ~s~n", [redact_key(ApiKey)]),
+            handle_broadcast(Socket, Body);
+        {error, Reason} ->
+            io:format("[WARN] Admin request failed authentication | Reason: ~p~n", [Reason]),
+            send_401(Socket)
+    end;
 
-handle_request(Socket, _Method, _Path, _Body) ->
+handle_request(Socket, _Method, _Path, _Body, _Headers) ->
     NotFound = <<"HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nNot Found">>,
     gen_tcp:send(Socket, NotFound),
     gen_tcp:close(Socket).
@@ -183,6 +190,65 @@ format_date({Y, M, D}) ->
 
 format_time({H, Mi, S}) ->
     io_lib:format("~2..0B:~2..0B:~2..0B", [H, Mi, S]).
+
+validate_api_key(Headers) ->
+    case extract_authorization_header(Headers) of
+        {ok, Token} ->
+            case validate_bearer_token(Token) of
+                {ok, _} -> {ok, Token};
+                error -> {error, invalid_token}
+            end;
+        error ->
+            {error, missing_authorization}
+    end.
+
+extract_authorization_header(Headers) ->
+    case lists:keyfind(<<"authorization">>, 1, Headers) of
+        {_, Value} ->
+            case binary:match(Value, <<"Bearer ">>) of
+                {0, 7} ->
+                    Token = binary:part(Value, 7, byte_size(Value) - 7),
+                    {ok, Token};
+                _ ->
+                    error
+            end;
+        false ->
+            error
+    end.
+
+validate_bearer_token(Token) ->
+    case application:get_env(beacon_core, admin_api_key) of
+        {ok, ConfigKey} ->
+            ConfigKeyBin = if is_list(ConfigKey) -> list_to_binary(ConfigKey); true -> ConfigKey end,
+            case Token =:= ConfigKeyBin of
+                true -> {ok, validated};
+                false -> error
+            end;
+        undefined ->
+            error
+    end.
+
+redact_key(Key) ->
+    case byte_size(Key) of
+        Len when Len > 4 ->
+            Prefix = binary:part(Key, 0, 4),
+            Suffix = <<"****">>,
+            <<Prefix/binary, Suffix/binary>>;
+        _ ->
+            <<"****">>
+    end.
+
+send_401(Socket) ->
+    Body = <<"{\r\n  \"error\": \"Unauthorized\"\r\n}">>,
+    ContentLength = integer_to_binary(byte_size(Body)),
+    Response = <<"HTTP/1.1 401 Unauthorized\r\n",
+                 "Content-Type: application/json\r\n",
+                 "Content-Length: ", ContentLength/binary, "\r\n",
+                 "Connection: close\r\n",
+                 "\r\n">>,
+    gen_tcp:send(Socket, Response),
+    gen_tcp:send(Socket, Body),
+    gen_tcp:close(Socket).
 
 send_202_accepted(Socket) ->
     Body = <<"{\r\n  \"status\": \"dispatched\"\r\n}">>,

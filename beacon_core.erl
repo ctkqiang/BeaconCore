@@ -60,6 +60,7 @@ parse_line(Line) ->
     end.
 
 mapping("BEAKON_HTTP_PORT")         -> {ok, http_port,         int};
+mapping("BEAKON_ADMIN_API_KEY")     -> {ok, admin_api_key,     bin};
 mapping("BEAKON_DB_HOST")           -> {ok, db_host,           str};
 mapping("BEAKON_DB_PORT")           -> {ok, db_port,           int};
 mapping("BEAKON_DB_USER")           -> {ok, db_username,       str};

@@ -173,13 +173,13 @@ handle_request(Socket, 'GET', <<"/ws", QueryString/binary>>, Headers, _Body) ->
     ?LOG_NOTICE("WebSocket upgrade request", #{query => QueryString, headers_count => length(Headers)}),
     ae_public_ws:handle_upgrade(Socket, Headers, binary_to_list(QueryString));
 
-handle_request(Socket, 'POST', <<"/v1/admin/broadcast", _/binary>>, _Headers, Body) ->
+handle_request(Socket, 'POST', <<"/v1/admin/broadcast", _/binary>>, Headers, Body) ->
     ?LOG_NOTICE("Admin broadcast request", #{body_size => byte_size(Body)}),
-    ae_admin_handler:handle_request(Socket, 'POST', <<"/v1/admin/broadcast">>, Body);
+    ae_admin_handler:handle_request(Socket, 'POST', <<"/v1/admin/broadcast">>, Body, Headers);
 
-handle_request(Socket, 'POST', <<"/v1/admin/", _/binary>> = Path, _Headers, Body) ->
+handle_request(Socket, 'POST', <<"/v1/admin/", _/binary>> = Path, Headers, Body) ->
     ?LOG_NOTICE("Admin request", #{path => Path, body_size => byte_size(Body)}),
-    ae_admin_handler:handle_request(Socket, 'POST', Path, Body);
+    ae_admin_handler:handle_request(Socket, 'POST', Path, Body, Headers);
 
 handle_request(Socket, Method, Path, _Headers, _Body) ->
     ?LOG_WARN("No matching route", #{method => Method, path => Path}),
