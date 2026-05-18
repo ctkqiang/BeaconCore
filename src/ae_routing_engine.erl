@@ -12,7 +12,7 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 init([]) ->
-    ?LOG_NOTICE("Routing engine initializing", #{}),
+    ?LOG_NOTICE("Routing engine initializing", #{}),    
     {ok, #state{}}.
 
 handle_call(_Request, _From, State) ->

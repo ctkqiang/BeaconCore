@@ -80,30 +80,59 @@ code_change(_OldVsn, State, _Extra) ->
 handle_client(Socket) ->
     case gen_tcp:recv(Socket, 0, 5000) of
         {ok, Data} ->
-            io:format("[DEBUG] Received raw data: ~p~n", [Data]),
-            case parse_http(Data) of
-                {ok, Method, Path} ->
-                    handle_request(Socket, Method, Path);
+            case parse_http_request(Data) of
+                {ok, Method, Path, Headers, Body} ->
+                    handle_request(Socket, Method, Path, Headers, Body);
                 _ ->
-                    handle_request(Socket, unknown, unknown)
+                    handle_request(Socket, unknown, unknown, [], <<>>)
             end;
         {error, Reason} ->
             io:format("[ERROR] Socket error: ~p~n", [Reason]),
             gen_tcp:close(Socket)
     end.
 
-parse_http(<<"GET ", Rest/binary>>) ->
-    case binary:split(Rest, <<" ">>) of
-        [Path, _] ->
-            io:format("[DEBUG] Parsed path: ~p~n", [Path]),
-            {ok, 'GET', Path};
+parse_http_request(Data) ->
+    case binary:split(Data, <<"\r\n">>, [global]) of
+        [RequestLine | Rest] ->
+            case binary:split(RequestLine, <<" ">>, [global]) of
+                [Method, Path, _Protocol | _] ->
+                    {Headers, Body} = parse_headers_and_body(Rest),
+                    MethodAtom = case string:uppercase(binary_to_list(Method)) of
+                        "GET" -> 'GET';
+                        "POST" -> 'POST';
+                        "PUT" -> 'PUT';
+                        "DELETE" -> 'DELETE';
+                        _ -> unknown
+                    end,
+                    {ok, MethodAtom, Path, Headers, Body};
+                _ ->
+                    error
+            end;
         _ ->
             error
-    end;
-parse_http(_) ->
-    error.
+    end.
 
-handle_request(Socket, 'GET', <<"/health", _/binary>>) ->
+parse_headers_and_body(Lines) ->
+    parse_headers_loop(Lines, []).
+
+parse_headers_loop([<<>>|Rest], Headers) ->
+    Body = iolist_to_binary(Rest),
+    {lists:reverse(Headers), Body};
+
+parse_headers_loop([Line|Rest], Headers) ->
+    case binary:split(Line, <<": ">>) of
+        [Key, Value] ->
+            KeyStr = string:lowercase(binary_to_list(Key)),
+            ValStr = binary_to_list(Value),
+            parse_headers_loop(Rest, [{KeyStr, ValStr}|Headers]);
+        _ ->
+            parse_headers_loop(Rest, Headers)
+    end;
+
+parse_headers_loop([], Headers) ->
+    {lists:reverse(Headers), <<>>}.
+
+handle_request(Socket, 'GET', <<"/health", _/binary>>, _Headers, _Body) ->
     io:format("[DEBUG] Matched /health~n"),
 
     % Check service status
@@ -137,11 +166,19 @@ handle_request(Socket, 'GET', <<"/health", _/binary>>) ->
     gen_tcp:send(Socket, Response),
     gen_tcp:close(Socket);
 
-handle_request(Socket, 'GET', <<"/ws", _/binary>>) ->
-    io:format("[DEBUG] Matched /ws~n"),
-    gen_tcp:close(Socket);
+handle_request(Socket, 'GET', <<"/ws", QueryString/binary>>, Headers, _Body) ->
+    io:format("[DEBUG] Matched /ws with query: ~p~n", [QueryString]),
+    ae_public_ws:handle_upgrade(Socket, Headers, binary_to_list(QueryString));
 
-handle_request(Socket, Method, Path) ->
+handle_request(Socket, 'POST', <<"/v1/admin/broadcast", _/binary>>, _Headers, Body) ->
+    io:format("[DEBUG] Matched /v1/admin/broadcast~n"),
+    ae_admin_handler:handle_request(Socket, 'POST', <<"/v1/admin/broadcast">>, Body);
+
+handle_request(Socket, 'POST', <<"/v1/admin/", _/binary>> = Path, _Headers, Body) ->
+    io:format("[DEBUG] Matched admin path: ~p~n", [Path]),
+    ae_admin_handler:handle_request(Socket, 'POST', Path, Body);
+
+handle_request(Socket, Method, Path, _Headers, _Body) ->
     io:format("[DEBUG] No match for Method: ~p, Path: ~p~n", [Method, Path]),
     NotFound = <<"HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nNot Found">>,
     gen_tcp:send(Socket, NotFound),
