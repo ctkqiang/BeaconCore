@@ -51,6 +51,18 @@ dev: compile
 		-config config/sys \
 		-eval "application:start(beacon_core)."
 
+.PHONY: kill
+kill:
+	@echo "========================================="
+	@echo "Killing BeaconCore processes..."
+	@echo "========================================="
+	@taskkill /F /IM erl.exe /T 2>/dev/null || true
+	@taskkill /F /IM beam.smp.exe /T 2>/dev/null || true
+	@echo "Processes killed."
+	@echo ""
+	@echo "Running Erlang processes:"
+	@tasklist | grep -E "erl|beam" || echo "None running"
+
 .PHONY: clean
 clean:
 	@echo "Cleaning compiled beam files..."
