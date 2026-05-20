@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BeaconCore - 烽燧 高性能直播和通知平台</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      background: #f5f5f5;
+    }
+
+    header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 40px 20px;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 2.5em;
+      margin-bottom: 10px;
+    }
+
+    header p {
+      font-size: 1.2em;
+      opacity: 0.9;
+    }
+
+    .language-switch {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      overflow: hidden;
+      z-index: 1000;
+    }
+
+    .language-switch button {
+      padding: 8px 16px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      font-size: 14px;
+      transition: background 0.3s;
+    }
+
+    .language-switch button:hover {
+      background: #f0f0f0;
+    }
+
+    .language-switch button.active {
+      background: #667eea;
+      color: white;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    section {
+      background: white;
+      margin: 20px 0;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    h2 {
+      color: #667eea;
+      margin: 30px 0 15px 0;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #667eea;
+    }
+
+    h3 {
+      color: #764ba2;
+      margin: 20px 0 10px 0;
+    }
+
+    code {
+      background: #f4f4f4;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+
+    pre {
+      background: #2d2d2d;
+      color: #f8f8f2;
+      padding: 15px;
+      border-radius: 5px;
+      overflow-x: auto;
+      margin: 10px 0;
+      font-size: 0.9em;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 15px 0;
+    }
+
+    table th, table td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+
+    table th {
+      background: #f5f5f5;
+      font-weight: bold;
+      color: #667eea;
+    }
+
+    table tr:hover {
+      background: #f9f9f9;
+    }
+
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin: 20px 0;
+    }
+
+    .feature-card {
+      background: linear-gradient(135deg, #667eea15, #764ba215);
+      padding: 20px;
+      border-radius: 8px;
+      border-left: 4px solid #667eea;
+    }
+
+    .feature-card h4 {
+      color: #667eea;
+      margin-bottom: 10px;
+    }
+
+    .status-ok {
+      color: #27ae60;
+      font-weight: bold;
+    }
+
+    .status-pending {
+      color: #f39c12;
+      font-weight: bold;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    footer {
+      text-align: center;
+      padding: 20px;
+      color: #666;
+      background: white;
+      margin-top: 40px;
+      border-top: 1px solid #ddd;
+    }
+
+    .breadcrumb {
+      font-size: 0.9em;
+      color: #999;
+      margin-bottom: 20px;
+    }
+
+    .breadcrumb a {
+      color: #667eea;
+      text-decoration: none;
+    }
+
+    .breadcrumb a:hover {
+      text-decoration: underline;
+    }
+
+    ul, ol {
+      margin-left: 20px;
+    }
+
+    li {
+      margin: 8px 0;
+    }
+
+    a {
+      color: #667eea;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 10px 20px;
+      background: #667eea;
+      color: white;
+      border-radius: 5px;
+      text-decoration: none;
+      margin: 10px 10px 10px 0;
+      transition: background 0.3s;
+    }
+
+    .btn:hover {
+      background: #764ba2;
+      text-decoration: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="language-switch">
+    <button class="active" onclick="switchLanguage('zh')">中文</button>
+    <button onclick="switchLanguage('en')">English</button>
+  </div>
+
+  <header>
+    <h1>⚡ BeaconCore (烽燧)</h1>
+    <p id="subtitle-zh">高性能分布式直播和通知平台</p>
+    <p id="subtitle-en" class="hidden">High-performance distributed live streaming and notification platform</p>
+  </header>
+
+  <div class="container">
+    <!-- Quick Start -->
+    <section>
+      <h2 id="quickstart-zh">快速开始 (5分钟)</h2>
+      <h2 id="quickstart-en" class="hidden">Quick Start (5 minutes)</h2>
+
+      <h3 id="prereq-zh">前置要求</h3>
+      <h3 id="prereq-en" class="hidden">Prerequisites</h3>
+
+      <pre>erl -version              # Erlang/OTP 28+
+docker run -d --name rabbitmq -p 5672:5672 -p 15672:15672 rabbitmq:3.12-management
+npm install -g wscat      # WebSocket CLI</pre>
+
+      <h3 id="run-title-zh">运行</h3>
+      <h3 id="run-title-en" class="hidden">Run</h3>
+
+      <pre>cd D:\ctkqiang\BeaconCore
+make clean && make compile
+make kill && make run</pre>
+
+      <h3 id="test-title-zh">测试</h3>
+      <h3 id="test-title-en" class="hidden">Test</h3>
+
+      <p id="test-health-zh">终端2 - 健康检查:</p>
+      <p id="test-health-en" class="hidden">Terminal 2 - Health Check:</p>
+      <pre>curl http://127.0.0.1:8080/health | jq</pre>
+
+      <p id="test-chat-zh">终端3 - WebSocket聊天:</p>
+      <p id="test-chat-en" class="hidden">Terminal 3 - WebSocket Chat:</p>
+      <pre>wscat -c "ws://127.0.0.1:8080/ws?user_id=alice"</pre>
+
+      <p id="test-stream-zh">终端4 - 开始直播:</p>
+      <p id="test-stream-en" class="hidden">Terminal 4 - Start Stream:</p>
+      <pre>curl -X POST http://127.0.0.1:8080/v1/streaming/broadcasts \
+  -H "Authorization: Bearer secret-key-12345" \
+  -H "Content-Type: application/json" \
+  -d '{"stream_id":"stream-001","broadcaster_id":"alice"}'</pre>
+    </section>
+
+    <!-- Features -->
+    <section>
+      <h2 id="features-zh">核心功能</h2>
+      <h2 id="features-en" class="hidden">Core Features</h2>
+
+      <div class="feature-grid">
+        <div class="feature-card">
+          <h4 id="stream-title-zh">直播流媒体</h4>
+          <h4 id="stream-title-en" class="hidden">Live Streaming</h4>
+          <p id="stream-desc-zh">一对多WebRTC直播,支持无限观众,低延迟媒体传输</p>
+          <p id="stream-desc-en" class="hidden">One-to-many WebRTC streaming with unlimited viewers and low-latency media</p>
+        </div>
+
+        <div class="feature-card">
+          <h4 id="chat-title-zh">实时聊天</h4>
+          <h4 id="chat-title-en" class="hidden">Real-time Chat</h4>
+          <p id="chat-desc-zh">基于WebSocket的实时聊天,支持多频道和用户消息</p>
+          <p id="chat-desc-en" class="hidden">WebSocket-based real-time chat with multi-channel support</p>
+        </div>
+
+        <div class="feature-card">
+          <h4 id="notif-title-zh">推送通知</h4>
+          <h4 id="notif-title-en" class="hidden">Push Notifications</h4>
+          <p id="notif-desc-zh">支持广播、用户特定和分段通知,集成RabbitMQ</p>
+          <p id="notif-desc-en" class="hidden">Broadcast, user-specific, and segment notifications with RabbitMQ</p>
+        </div>
+
+        <div class="feature-card">
+          <h4 id="infra-title-zh">基础设施</h4>
+          <h4 id="infra-title-en" class="hidden">Infrastructure</h4>
+          <p id="infra-desc-zh">纯Erlang/OTP构建,零外部依赖,水平扩展,集群原生</p>
+          <p id="infra-desc-en" class="hidden">Pure Erlang/OTP, zero external dependencies, horizontally scalable</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- API Endpoints -->
+    <section>
+      <h2 id="api-zh">API端点</h2>
+      <h2 id="api-en" class="hidden">API Endpoints</h2>
+
+      <table>
+        <thead>
+          <tr>
+            <th id="api-method-zh">方法</th>
+            <th id="api-method-en" class="hidden">Method</th>
+            <th id="api-path-zh">路径</th>
+            <th id="api-path-en" class="hidden">Path</th>
+            <th id="api-auth-zh">认证</th>
+            <th id="api-auth-en" class="hidden">Auth</th>
+            <th id="api-purpose-zh">用途</th>
+            <th id="api-purpose-en" class="hidden">Purpose</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>GET</td>
+            <td><code>/health</code></td>
+            <td id="api-auth-none-zh">无</td>
+            <td id="api-auth-none-en" class="hidden">None</td>
+            <td id="api-purpose-health-zh">服务状态</td>
+            <td id="api-purpose-health-en" class="hidden">Service status</td>
+          </tr>
+          <tr>
+            <td>GET</td>
+            <td><code>/ws?user_id=&lt;id&gt;</code></td>
+            <td id="api-auth-user-zh">用户ID</td>
+            <td id="api-auth-user-en" class="hidden">User ID</td>
+            <td id="api-purpose-ws-zh">WebSocket升级</td>
+            <td id="api-purpose-ws-en" class="hidden">WebSocket upgrade</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/v1/streaming/broadcasts</code></td>
+            <td id="api-auth-bearer-zh">Bearer令牌</td>
+            <td id="api-auth-bearer-en" class="hidden">Bearer token</td>
+            <td id="api-purpose-broadcast-zh">启动直播</td>
+            <td id="api-purpose-broadcast-en" class="hidden">Start stream</td>
+          </tr>
+          <tr>
+            <td>POST</td>
+            <td><code>/v1/admin/broadcast</code></td>
+            <td id="api-auth-bearer-2-zh">Bearer令牌</td>
+            <td id="api-auth-bearer-2-en" class="hidden">Bearer token</td>
+            <td id="api-purpose-notif-zh">发送通知</td>
+            <td id="api-purpose-notif-en" class="hidden">Send notification</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <!-- Status -->
+    <section>
+      <h2 id="status-zh">系统状态</h2>
+      <h2 id="status-en" class="hidden">System Status</h2>
+
+      <h3 id="implemented-zh">已实现并工作</h3>
+      <h3 id="implemented-en" class="hidden">Implemented & Working</h3>
+      <ul>
+        <li><span class="status-ok">✓</span> <span id="status-ws-zh">WebSocket连接(RFC 6455)</span><span id="status-ws-en" class="hidden">WebSocket connections (RFC 6455)</span></li>
+        <li><span class="status-ok">✓</span> <span id="status-webrtc-zh">WebRTC流媒体处理(gen_server)</span><span id="status-webrtc-en" class="hidden">WebRTC streaming handler (gen_server)</span></li>
+        <li><span class="status-ok">✓</span> <span id="status-broadcast-zh">广播生命周期管理</span><span id="status-broadcast-en" class="hidden">Broadcast lifecycle management</span></li>
+        <li><span class="status-ok">✓</span> <span id="status-viewer-zh">观众管理和追踪</span><span id="status-viewer-en" class="hidden">Viewer management & tracking</span></li>
+        <li><span class="status-ok">✓</span> <span id="status-signaling-zh">SDP/ICE信令</span><span id="status-signaling-en" class="hidden">SDP/ICE signaling</span></li>
+        <li><span class="status-ok">✓</span> <span id="status-rabbit-zh">RabbitMQ事件发布</span><span id="status-rabbit-en" class="hidden">RabbitMQ event publishing</span></li>
+      </ul>
+
+      <h3 id="inprogress-zh">进行中</h3>
+      <h3 id="inprogress-en" class="hidden">In Progress</h3>
+      <ul>
+        <li><span class="status-pending">○</span> <span id="status-media-zh">媒体传输(media_engine集成)</span><span id="status-media-en" class="hidden">Media transport (media_engine integration)</span></li>
+        <li><span class="status-pending">○</span> <span id="status-ice-zh">ICE候选收集</span><span id="status-ice-en" class="hidden">ICE candidate gathering</span></li>
+      </ul>
+
+      <h3 id="future-zh">未来计划</h3>
+      <h3 id="future-en" class="hidden">Future</h3>
+      <ul>
+        <li><span id="future-vapid-zh">VAPID Web Push(离线通知)</span><span id="future-vapid-en" class="hidden">VAPID Web Push (offline notifications)</span></li>
+        <li><span id="future-record-zh">流媒体录制和重放</span><span id="future-record-en" class="hidden">Stream recording & replay</span></li>
+        <li><span id="future-analytics-zh">观众分析和统计</span><span id="future-analytics-en" class="hidden">Viewer analytics</span></li>
+      </ul>
+    </section>
+
+    <!-- Documentation -->
+    <section>
+      <h2 id="docs-zh">文档</h2>
+      <h2 id="docs-en" class="hidden">Documentation</h2>
+
+      <ul>
+        <li><a href="STREAMING.md" id="doc-streaming-zh">STREAMING.md - WebRTC一对多直播</a><span id="doc-streaming-en" class="hidden"> - WebRTC one-to-many streaming</span></li>
+        <li><a href="MESSAGING.md" id="doc-messaging-zh">MESSAGING.md - 聊天和通知</a><span id="doc-messaging-en" class="hidden"> - Chat and notifications</span></li>
+        <li><a href="API.md" id="doc-api-zh">API.md - 完整端点参考</a><span id="doc-api-en" class="hidden"> - Complete endpoint reference</span></li>
+        <li><a href="ARCHITECTURE.md" id="doc-arch-zh">ARCHITECTURE.md - 系统设计细节</a><span id="doc-arch-en" class="hidden"> - System design details</span></li>
+      </ul>
+    </section>
+
+    <!-- Version -->
+    <section style="text-align: center; background: #f9f9f9;">
+      <p><strong id="version-zh">版本:</strong><strong id="version-en" class="hidden">Version:</strong> 0.6.0 (Beta - Streaming)</p>
+      <p id="updated-zh">最后更新: 2026-05-20</p>
+      <p id="updated-en" class="hidden">Last Updated: 2026-05-20</p>
+      <p id="milestone-zh">下一个里程碑: 媒体传输和录制</p>
+      <p id="milestone-en" class="hidden">Next Milestone: Media Transport & Recording</p>
+    </section>
+  </div>
+
+  <footer>
+    <p>BeaconCore - MIT License</p>
+  </footer>
+
+  <script>
+    function switchLanguage(lang) {
+      const buttons = document.querySelectorAll('.language-switch button');
+      buttons.forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+
+      const allElements = document.querySelectorAll('[id*="-zh"], [id*="-en"]');
+      allElements.forEach(el => {
+        const suffix = lang === 'zh' ? '-zh' : '-en';
+        if (el.id.endsWith(suffix)) {
+          el.classList.remove('hidden');
+        } else if (el.id.endsWith(suffix === '-zh' ? '-en' : '-zh')) {
+          el.classList.add('hidden');
+        }
+      });
+
+      localStorage.setItem('language', lang);
+    }
+
+    // Load saved language preference
+    const savedLang = localStorage.getItem('language') || 'zh';
+    switchLanguage(savedLang);
+  </script>
+</body>
+</html>
