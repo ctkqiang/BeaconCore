@@ -18,20 +18,40 @@ get_health() ->
 
 init([]) ->
     ?LOG_INFO("Network gateway initializing"),
+    ?LOG_DEBUG("Reading configuration from application environment", #{}),
 
     Port = application:get_env(beacon_core, http_port, 8080),
-    ?LOG_DEBUG("Gateway port configured", #{port => Port}),
+    ?LOG_DEBUG("HTTP server port configured", #{port => Port, backlog => 128}),
 
-    SocketOptions = [binary, {reuseaddr, true}, {active, false}],
+    SocketOptions = [binary, {reuseaddr, true}, {active, false}, {backlog, 128}],
+
+    ?LOG_DEBUG("Socket options prepared", #{
+        mode => binary,
+        reuse_address => true,
+        blocking => false,
+        backlog => 128
+    }),
 
     case gen_tcp:listen(Port, SocketOptions) of
         {ok, ListenSocket} ->
-            ?LOG_NOTICE("Gateway listening on port", #{port => Port}),
-            %% Signal the process to immediately jump into its non-blocking accept loop
+            ?LOG_NOTICE("Gateway listening on port", #{
+                port => Port,
+                socket => ListenSocket,
+                protocol => 'HTTP/1.1',
+                mode => listen
+            }),
+
+            ?LOG_DEBUG("Triggering accept loop initialization", #{}),
             self() ! accept_next,
             {ok, #state{listen_socket = ListenSocket}};
+
         {error, Reason} ->
-            ?LOG_ERROR("Gateway failed to bind to port", #{port => Port, reason => Reason}),
+            ?LOG_ERROR("Gateway failed to bind to port", #{
+                port => Port,
+                reason => Reason,
+                error_type => element(1, Reason),
+                socket_options => SocketOptions
+            }),
             {stop, Reason}
     end.
 
@@ -78,19 +98,60 @@ code_change(_OldVsn, State, _Extra) ->
 %% ====================================================================
 
 handle_client(Socket) ->
+    {ok, {RemoteIp, RemotePort}} = inet:peername(Socket),
+    RemoteAddr = inet:ntoa(RemoteIp),
+
+    ?LOG_DEBUG("Client connection accepted", #{
+        socket => Socket,
+        remote_addr => RemoteAddr,
+        remote_port => RemotePort,
+        socket_module => gen_tcp
+    }),
+
     case gen_tcp:recv(Socket, 0, 5000) of
         {ok, Data} ->
-            ?LOG_DEBUG("Raw HTTP request received", #{size_bytes => byte_size(Data)}),
+            DataSize = byte_size(Data),
+            ?LOG_DEBUG("Raw HTTP request received", #{
+                size_bytes => DataSize,
+                remote_addr => RemoteAddr,
+                socket => Socket
+            }),
+
             case parse_http_request(Data) of
                 {ok, Method, Path, Headers, Body} ->
-                    ?LOG_DEBUG("Parsed HTTP request", #{method => Method, path => Path, headers_count => length(Headers), body_size => byte_size(Body)}),
+                    ?LOG_DEBUG("HTTP request parsed successfully", #{
+                        method => Method,
+                        path => Path,
+                        headers_count => length(Headers),
+                        body_size => byte_size(Body),
+                        content_type => proplists:get_value("content-type", Headers, "not-set"),
+                        user_agent => proplists:get_value("user-agent", Headers, "unknown")
+                    }),
                     handle_request(Socket, Method, Path, Headers, Body);
-                _ ->
-                    ?LOG_WARN("Failed to parse HTTP request", #{}),
+                {error, ParseReason} ->
+                    ?LOG_WARN("Failed to parse HTTP request", #{
+                        reason => ParseReason,
+                        remote_addr => RemoteAddr,
+                        data_size => DataSize
+                    }),
                     handle_request(Socket, unknown, unknown, [], <<>>)
             end;
+
+        {error, timeout} ->
+            ?LOG_DEBUG("Socket receive timeout (5s) - no data from client", #{
+                remote_addr => RemoteAddr,
+                socket => Socket,
+                timeout_ms => 5000
+            }),
+            gen_tcp:close(Socket);
+
         {error, Reason} ->
-            ?LOG_ERROR("Socket receive error", #{reason => Reason}),
+            ?LOG_ERROR("Socket receive error", #{
+                reason => Reason,
+                error_type => element(1, Reason),
+                remote_addr => RemoteAddr,
+                socket => Socket
+            }),
             gen_tcp:close(Socket)
     end.
 
@@ -136,7 +197,13 @@ parse_headers_loop([], Headers) ->
     {lists:reverse(Headers), <<>>}.
 
 handle_request(Socket, 'GET', <<"/health", _/binary>>, _Headers, _Body) ->
-    ?LOG_NOTICE("Processing /health request", #{}),
+    StartTime = erlang:system_time(microsecond),
+
+    ?LOG_NOTICE("Health check request initiated", #{
+        endpoint => "/health",
+        timestamp => StartTime,
+        socket => Socket
+    }),
 
     DbStatus = check_database_status(),
     PgStatus = check_pg_status(),
@@ -147,10 +214,18 @@ handle_request(Socket, 'GET', <<"/health", _/binary>>, _Headers, _Body) ->
         _ -> <<"degraded">>
     end,
 
-    ?LOG_DEBUG("Health check results", #{database => DbStatus, process_group => PgStatus, amqp => AmqpStatus, overall => OverallStatus}),
+    ?LOG_DEBUG("Health check component status", #{
+        database => DbStatus,
+        process_group => PgStatus,
+        amqp => AmqpStatus,
+        overall => OverallStatus,
+        uptime_us => StartTime,
+        memory_bytes => erlang:memory(total)
+    }),
 
     Body = build_health_response(OverallStatus, DbStatus, PgStatus, AmqpStatus),
-    ContentLength = integer_to_binary(byte_size(Body)),
+    BodySize = byte_size(Body),
+    ContentLength = integer_to_binary(BodySize),
 
     Response = <<"HTTP/1.1 200 OK\r\n"
                  "Content-Type: application/json; charset=utf-8\r\n"
@@ -165,20 +240,58 @@ handle_request(Socket, 'GET', <<"/health", _/binary>>, _Headers, _Body) ->
                  "Connection: close\r\n"
                  "\r\n",
                  Body/binary>>,
-    gen_tcp:send(Socket, Response),
-    ?LOG_NOTICE("Sent /health response", #{status => OverallStatus, size_bytes => byte_size(Body)}),
+
+    case gen_tcp:send(Socket, Response) of
+        ok ->
+            ElapsedUs = erlang:system_time(microsecond) - StartTime,
+            ?LOG_NOTICE("Health check response sent successfully", #{
+                status => OverallStatus,
+                response_size_bytes => BodySize,
+                response_time_us => ElapsedUs,
+                http_code => 200,
+                socket => Socket
+            });
+        {error, SendError} ->
+            ?LOG_ERROR("Failed to send health check response", #{
+                error => SendError,
+                socket => Socket,
+                response_size => BodySize
+            })
+    end,
+
     gen_tcp:close(Socket);
 
 handle_request(Socket, 'GET', <<"/ws", QueryString/binary>>, Headers, _Body) ->
-    ?LOG_NOTICE("WebSocket upgrade request", #{query => QueryString, headers_count => length(Headers)}),
+    ?LOG_NOTICE("WebSocket upgrade request received", #{
+        endpoint => "/ws",
+        query_string => QueryString,
+        headers_count => length(Headers),
+        upgrade_header => proplists:get_value("upgrade", Headers, "not-set"),
+        connection_header => proplists:get_value("connection", Headers, "not-set")
+    }),
     ae_public_ws:handle_upgrade(Socket, Headers, binary_to_list(QueryString));
 
 handle_request(Socket, 'POST', <<"/v1/admin/broadcast", _/binary>>, Headers, Body) ->
-    ?LOG_NOTICE("Admin broadcast request", #{body_size => byte_size(Body)}),
+    BodySize = byte_size(Body),
+    ?LOG_NOTICE("Admin broadcast request received", #{
+        endpoint => "/v1/admin/broadcast",
+        body_size => BodySize,
+        headers_count => length(Headers),
+        auth_header => case proplists:get_value("authorization", Headers, undefined) of
+            undefined -> "missing";
+            V -> "present"
+        end,
+        content_type => proplists:get_value("content-type", Headers, "not-set")
+    }),
     ae_admin_handler:handle_request(Socket, 'POST', <<"/v1/admin/broadcast">>, Body, Headers);
 
 handle_request(Socket, 'POST', <<"/v1/admin/", _/binary>> = Path, Headers, Body) ->
-    ?LOG_NOTICE("Admin request", #{path => Path, body_size => byte_size(Body)}),
+    ?LOG_NOTICE("Admin API request received", #{
+        endpoint => Path,
+        body_size => byte_size(Body),
+        headers_count => length(Headers),
+        auth_present => proplists:is_defined("authorization", Headers)
+    }),
     ae_admin_handler:handle_request(Socket, 'POST', Path, Body, Headers);
 
 handle_request(Socket, Method, Path, _Headers, _Body) ->

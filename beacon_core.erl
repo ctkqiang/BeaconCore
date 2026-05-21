@@ -3,22 +3,71 @@
 
 -export([start/2, stop/1]).
 
--include_lib("header/logger.hrl").
+-include_lib("beacon_core/header/logger.hrl").
 
 start(_StartType, _StartArgs) ->
-    beacon_logger:set_level(info),
+    beacon_logger:set_level(debug),
+
+    io:format(
+        "~n~n" ++
+        "╔════════════════════════════════════════════════════════════════╗~n" ++
+        "║           BeaconCore Application Startup Sequence             ║~n" ++
+        "║   Erlang/OTP ~s | PID ~w | Node: ~w~n" ++
+        "╚════════════════════════════════════════════════════════════════╝~n~n",
+        [erlang:system_info(otp_release), self(), node()]
+    ),
+
+    ?LOG_INFO("=== BeaconCore Initialization Started ==="),
+    ?LOG_DEBUG("Loading environment configuration", #{
+        otp_version => erlang:system_info(otp_release),
+        vm_args => erlang:system_info(scheduler_id),
+        total_memory_mb => erlang:memory(total) div (1024 * 1024)
+    }),
+
     load_env(),
+    ?LOG_INFO("Environment configuration loaded from .env file"),
 
+    ?LOG_DEBUG("Starting process group (PG) for notification scope", #{}),
     {ok, _PgPid} = pg:start_link(notification_scope),
+    ?LOG_INFO("Process group initialized", #{pg_pid => _PgPid}),
 
+    ?LOG_DEBUG("Starting supervision tree", #{}),
     case beacon_core_supervisor:start_link() of
         {ok, SupPid} ->
-            beacon_logger:log(info, "BeaconCore application initialized successfully.", []),
             Port = application:get_env(beacon_core, http_port, 8080),
-            io:format("[BeaconCore] Active | Health check port: ~p~n", [Port]),
+            AdminKey = application:get_env(beacon_core, admin_api_key, <<"not-set">>),
+            RabbitHost = application:get_env(beacon_core, amqp_host, "localhost"),
+            RabbitPort = application:get_env(beacon_core, amqp_port, 5672),
+
+            ?LOG_NOTICE("=== BeaconCore Startup Complete ===", #{
+                supervisor_pid => SupPid,
+                http_port => Port,
+                rabbitmq_host => RabbitHost,
+                rabbitmq_port => RabbitPort,
+                admin_api_configured => (AdminKey =/= <<"not-set">>)
+            }),
+
+            io:format(
+                "~n╔════════════════════════════════════════════════════════════════╗~n" ++
+                "║  [✓] BeaconCore Application is RUNNING and READY                ║~n" ++
+                "║                                                                  ║~n" ++
+                "║  HTTP Server:    http://127.0.0.1:~w                           ║~n" ++
+                "║  Health Check:   http://127.0.0.1:~w/health                   ║~n" ++
+                "║  WebSocket:      ws://127.0.0.1:~w/ws                         ║~n" ++
+                "║  Admin API:      /v1/admin/broadcast (Bearer token required)    ║~n" ++
+                "║  Documentation:  http://127.0.0.1:~w/docs/index.html           ║~n" ++
+                "║                                                                  ║~n" ++
+                "║  Supervisor PID: ~w                                       ║~n" ++
+                "║  Node:           ~w                                      ║~n" ++
+                "║  Erlang/OTP:     ~s                                            ║~n" ++
+                "╚════════════════════════════════════════════════════════════════╝~n~n",
+                [Port, Port, Port, Port, SupPid, node(), erlang:system_info(otp_release)]
+            ),
+
             {ok, SupPid};
-            
+
         {error, Reason} ->
+            ?LOG_FATAL("Failed to start supervision tree", #{reason => Reason, error_type => element(1, Reason)}),
             {error, Reason}
     end.
 
